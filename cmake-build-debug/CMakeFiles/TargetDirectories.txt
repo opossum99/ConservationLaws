@@ -1,0 +1,3 @@
+/Users/mikhailshlychkov/CLionProjects/ConservationLawsProject/cmake-build-debug/CMakeFiles/ConservationLawsProject.dir
+/Users/mikhailshlychkov/CLionProjects/ConservationLawsProject/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/mikhailshlychkov/CLionProjects/ConservationLawsProject/cmake-build-debug/CMakeFiles/rebuild_cache.dir

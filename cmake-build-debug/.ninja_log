@@ -1,0 +1,8 @@
+# ninja log v5
+710	738	1715658978316628280	ConservationLawsProject	596713e917e7418
+3	710	1715658978286829613	CMakeFiles/ConservationLawsProject.dir/main.cpp.o	758ad784379d1e10
+6	493	1715606113669238545	CMakeFiles/ConservationLawsProject.dir/initial.cpp.o	971f71ab40b8281
+3	585	1715658953401268681	CMakeFiles/ConservationLawsProject.dir/Geometry.cpp.o	a68295c2edbadd8f
+0	194	1716311883465174423	build.ninja	529c8329d5a3a05
+7	1058	1715606114232371120	CMakeFiles/ConservationLawsProject.dir/Solver.cpp.o	3ac2a9644e03864b
+4	938	1715658953756184886	CMakeFiles/ConservationLawsProject.dir/AnaliticalSolution.cpp.o	416b59130c3f523
