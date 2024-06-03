@@ -1,4 +1,4 @@
-# Install script for directory: /Users/mikhailshlychkov/CLionProjects/ConservationLawsProject
+# Install script for directory: /Users/mikhailshlychkov/CLionProjects/HPC/HPC_Project
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/Users/mikhailshlychkov/CLionProjects/ConservationLawsProject/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/Users/mikhailshlychkov/CLionProjects/HPC/HPC_Project/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

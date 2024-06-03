@@ -4,7 +4,7 @@
 #include "Solver.hpp"
 
 
-auto Q2var(Eigen::Vector4d Q) {
+RUVP Q2var(const Eigen::Vector4d &Q) {
     RUVP var{};
     var.r = Q[0];
     var.u = Q[1] / Q[0];
@@ -13,7 +13,7 @@ auto Q2var(Eigen::Vector4d Q) {
     return var;
 }
 
-auto Q2F(Eigen::Vector4d Q) {
+auto Q2F(const Eigen::Vector4d &Q) {
     Eigen::Vector4d F(4);
     double u = Q[1] / Q[0];
     double v = Q[2] / Q[0];
@@ -25,7 +25,7 @@ auto Q2F(Eigen::Vector4d Q) {
     return F;
 }
 
-auto Q2G(Eigen::Vector4d Q) {
+auto Q2G(const Eigen::Vector4d &Q) {
     Eigen::Vector4d G(4);
     double u = Q[1] / Q[0];
     double v = Q[2] / Q[0];
@@ -37,7 +37,7 @@ auto Q2G(Eigen::Vector4d Q) {
     return G;
 }
 
-auto var2Q(RUVP var) {
+auto var2Q(const RUVP &var) {
     Eigen::Vector4d Q;
     Q[0] = var.r;
     Q[1] = var.r * var.u;
@@ -48,7 +48,9 @@ auto var2Q(RUVP var) {
 
 Solver::Solver(const std::vector<std::pair<double, double>> &mesh, const std::vector<RUVP> &init_solution,
                double dt, int N_x, double courant) : xy_(mesh), solution_(init_solution), dt_(dt), stride_(N_x),
-                                                         geometry_(N_x, static_cast<int>(mesh.size()) / N_x), time_(0) {
+                                                     N_y(mesh.size() / N_x), time_(0) {
+    Flux_x.resize((stride_ - 1) * (N_y - 2));
+    Flux_y.resize((stride_ - 2) * (N_y - 1));
     Q_.resize(xy_.size());
     F_.resize(xy_.size());
     G_.resize(xy_.size());
@@ -63,41 +65,17 @@ Solver::Solver(const std::vector<std::pair<double, double>> &mesh, const std::ve
 }
 
 void Solver::boundaries() {
-//    for(auto idx: geometry_.ghost("left")){
-//        auto [i, j] = k2ij(idx);
-//        Q_[idx] = Q_[ij2k(i + 1, j)];
-//    }
-    for (auto idx: geometry_.ghost({"right", "free"})) {
-        auto [i, j] = k2ij(idx);
-        Q_[idx] = Q_[ij2k(i - 1, j)];
+    for (int i = 0; i < stride_; i++) {
+        Q_[ij2k(i, 0)] = Q_[ij2k(i, 1)];
+        Q_[ij2k(i, 0)][2] = -Q_[ij2k(i, 0)][2];
+        Q_[ij2k(i, static_cast<int>(N_y - 1))] = Q_[ij2k(i, static_cast<int>(N_y - 2))];
+        Q_[ij2k(i, static_cast<int>(N_y - 1))][2] = -Q_[ij2k(i, static_cast<int>(N_y - 1))][2];
     }
-    for (auto idx: geometry_.ghost({"up", "firm"})) {
-        auto [i, j] = k2ij(idx);
-        auto ruvp = Q2var(Q_[ij2k(i, j - 1)]);
-        ruvp.v = -ruvp.v;
-        Q_[idx] = var2Q(ruvp);
-    }
-    for (auto idx: geometry_.ghost({"down", "firm"})) {
-        auto [i, j] = k2ij(idx);
-        auto ruvp = Q2var(Q_[ij2k(i, j + 1)]);
-        ruvp.v = -ruvp.v;
-        Q_[idx] = var2Q(ruvp);
-    }
-    for (auto idx: geometry_.ghost({"up", "free"})) {
-        auto [i, j] = k2ij(idx);
-        Q_[idx] = Q_[ij2k(i, j - 1)];
-    }
-    for (auto idx: geometry_.ghost({"right", "firm"})) {
-        auto [i, j] = k2ij(idx);
-        auto ruvp = Q2var(Q_[ij2k(i - 1, j)]);
-        ruvp.u = -ruvp.u;
-        Q_[idx] = var2Q(ruvp);
-    }
-    for (auto idx: geometry_.ghost({"left", "firm"})) {
-        auto [i, j] = k2ij(idx);
-        auto ruvp = Q2var(Q_[ij2k(i + 1, j)]);
-        ruvp.u = -ruvp.u;
-        Q_[idx] = var2Q(ruvp);
+    for (int j = 0; j < N_y; j++) {
+        Q_[ij2k(0, j)] = Q_[ij2k(1, 0)];
+        Q_[ij2k(0, j)][1] = -Q_[ij2k(0, 0)][1];
+        Q_[ij2k(static_cast<int>(stride_ - 1), j)] = Q_[ij2k(static_cast<int>(N_y - 2), j)];
+        Q_[ij2k(static_cast<int>(N_y - 1), j)][1] = -Q_[ij2k(static_cast<int>(N_y - 1), j)][1];
     }
 }
 
@@ -105,8 +83,8 @@ void Solver::LaxFriedrichs(const double T_end) {
     std::vector<Eigen::Vector4d> Q_tmp = Q_;
     auto cfl = [&](int idx) {
         auto [r, u, v, p] = Q2var(Q_[idx]);
-        auto a = GAMMA * p / r;
-        if (dt_ > cour_ / ((abs(u) + a) / x_step_ + (abs(v) + a) / y_step_)){
+        auto a = std::sqrt(GAMMA * p / r);
+        if (dt_ > cour_ / ((abs(u) + a) / x_step_ + (abs(v) + a) / y_step_)) {
             dt_ = cour_ / ((abs(u) + a) / x_step_ + (abs(v) + a) / y_step_);
         };
     };
@@ -114,12 +92,13 @@ void Solver::LaxFriedrichs(const double T_end) {
         for (int i = 0; i < xy_.size(); i++) {
             cfl(i);
         }
-        for (auto idx: geometry_.interior()) {
-            auto [i, j] = k2ij(idx);
-            Q_tmp[idx] = (Q_[ij2k(i + 1, j)] + Q_[ij2k(i, j - 1)] + Q_[ij2k(i - 1, j)] +
-                          Q_[ij2k(i, j + 1)]) / 4 - ((F_[ij2k(i + 1, j)] - F_[ij2k(i - 1, j)]) / x_step_ +
-                                                     (G_[ij2k(i, j + 1)] - G_[ij2k(i, j - 1)]) / y_step_) *
-                                                    dt_ / 2;
+        for (int i = 0; i < stride_; i++) {
+            for (int j = 0; j < stride_; j++) {
+                Q_tmp[ij2k(i, j)] = (Q_[ij2k(i + 1, j)] + Q_[ij2k(i, j - 1)] + Q_[ij2k(i - 1, j)] +
+                                     Q_[ij2k(i, j + 1)]) / 4 - ((F_[ij2k(i + 1, j)] - F_[ij2k(i - 1, j)]) / x_step_ +
+                                                                (G_[ij2k(i, j + 1)] - G_[ij2k(i, j - 1)]) / y_step_) *
+                                                               dt_ / 2;
+            }
         }
         Q_ = Q_tmp;
         boundaries();
@@ -128,73 +107,19 @@ void Solver::LaxFriedrichs(const double T_end) {
             G_[i] = Q2G(Q_[i]);
         }
         time_ += dt_;
-//        for (int i = 0; i < xy_.size(); i++) {
-//            solution_[i] = Q2var(Q_[i]);
-//        }
-        //VisualVTK(std::string("pictures/data") + std::to_string(time_) + ".vtk");
+        for (int i = 0; i < Q_.size(); i++) {
+            solution_[i] = Q2var(Q_[i]);
+        }
+        VisualVTK(std::string("../pictures/lax") + std::to_string(time_) + ".vtk");
         std::cout << "Time = " << time_ << std::endl;
     }
     for (int i = 0; i < xy_.size(); i++) {
         solution_[i] = Q2var(Q_[i]);
     }
-//    for (int j = 0; j < xy_.size() / stride_; j++) {
-//        for (int i = 0; i < stride_; i++) {
-//            auto [r, u, v, p] = Q2var(Q_[ij2k(i, j)]);
-//            std::cout << r << " ";
-//        }
-//        std::cout << std::endl;
-//    }
 }
 
-void Solver::MUSCL_PLM(const double T_end) {
-    std::vector<Eigen::Vector4d> Fluxes_x (xy_.size() / (stride_));
-    std::vector<Eigen::Vector4d> Fluxes_y;
-    std::vector<Eigen::Vector4d> Q_tmp = Q_;
-    auto cfl = [&](int idx) {
-        auto [r, u, v, p] = Q2var(Q_[idx]);
-        auto a = GAMMA * p / r;
-        if (dt_ > cour_ / ((abs(u) + a) / x_step_ + (abs(v) + a) / y_step_)){
-            dt_ = cour_ / ((abs(u) + a) / x_step_ + (abs(v) + a) / y_step_);
-        };
-    };
-    while (time_ < T_end) {
-        for (int i = 0; i < xy_.size(); i++) {
-            cfl(i);
-        }
-        for (auto idx: geometry_.interior()) {
-            auto [i, j] = k2ij(idx);
-            Q_tmp[idx] = (Q_[ij2k(i + 1, j)] + Q_[ij2k(i, j - 1)] + Q_[ij2k(i - 1, j)] +
-                          Q_[ij2k(i, j + 1)]) / 4 - ((F_[ij2k(i + 1, j)] - F_[ij2k(i - 1, j)]) / x_step_ +
-                                                     (G_[ij2k(i, j + 1)] - G_[ij2k(i, j - 1)]) / y_step_) *
-                                                    dt_ / 2;
-        }
-        Q_ = Q_tmp;
-        boundaries();
-        for (int i = 0; i < solution_.size(); i++) {
-            F_[i] = Q2F(Q_[i]);
-            G_[i] = Q2G(Q_[i]);
-        }
-        time_ += dt_;
-//        for (int i = 0; i < xy_.size(); i++) {
-//            solution_[i] = Q2var(Q_[i]);
-//        }
-        //VisualVTK(std::string("pictures/data") + std::to_string(time_) + ".vtk");
-        std::cout << "Time = " << time_ << std::endl;
-    }
-    for (int i = 0; i < xy_.size(); i++) {
-        solution_[i] = Q2var(Q_[i]);
-    }
-//    for (int j = 0; j < xy_.size() / stride_; j++) {
-//        for (int i = 0; i < stride_; i++) {
-//            auto [r, u, v, p] = Q2var(Q_[ij2k(i, j)]);
-//            std::cout << r << " ";
-//        }
-//        std::cout << std::endl;
-//    }
-}
 
 void Solver::VisualVTK(const std::string &file_name) {
-    const int N_y = static_cast<int>(xy_.size()) / stride_;
     std::ofstream out(file_name);
     out << "# vtk DataFile Version 3.0\nvtk output\nASCII\nDATASET RECTILINEAR_GRID\n";
     out << "DIMENSIONS " << stride_ - 1 << " " << N_y - 1 << " 1" << std::endl;
@@ -233,9 +158,48 @@ void Solver::VisualVTK(const std::string &file_name) {
     out.close();
 }
 
-double Solver::compare(const std::vector<RUVP> &expected){
+void Solver::VisualVTK_FULL(const std::string &file_name) {
+    std::ofstream out(file_name);
+    out << "# vtk DataFile Version 3.0\nvtk output\nASCII\nDATASET RECTILINEAR_GRID\n";
+    out << "DIMENSIONS " << stride_ + 1 << " " << N_y + 1 << " 1" << std::endl;
+    out << "X_COORDINATES " << stride_ + 1 << " float\n";
+    for (int i = 0; i < stride_; i++) {
+        out << xy_[i].first - x_step_ / 2 << " ";
+    }
+    out << xy_[stride_ - 1].first + x_step_ / 2 << std::endl;
+    out << "Y_COORDINATES " << N_y + 1 << " float\n";
+    for (int i = 0; i < N_y; i++) {
+        out << xy_[ij2k(0, i)].second - y_step_ / 2 << " ";
+    }
+    out << xy_[ij2k(static_cast<std::size_t>(0), N_y - 1)].second + y_step_ / 2 << std::endl;
+    out << "Z_COORDINATES 1 float\n0\n";
+    out << "CELL_DATA " << stride_ * N_y << std::endl;
+    out << "SCALARS density double 1" << std::endl;
+    out << "LOOKUP_TABLE default" << std::endl;
+    for (int j = 0; j < N_y; j++) {
+        for (int i = 0; i < stride_; i++) {
+            out << solution_[ij2k(i, j)].r << std::endl;
+        }
+    }
+    out << "SCALARS pressure double 1" << std::endl;
+    out << "LOOKUP_TABLE default" << std::endl;
+    for (int j = 0; j < N_y; j++) {
+        for (int i = 0; i < stride_; i++) {
+            out << solution_[ij2k(i, j)].p << std::endl;
+        }
+    }
+    out << "VECTORS velocity double" << std::endl;
+    for (int j = 0; j < N_y; j++) {
+        for (int i = 0; i < stride_; i++) {
+            out << std::fixed << solution_[ij2k(i, j)].u << " " << solution_[ij2k(i, j)].v << " 0" << std::endl;
+        }
+    }
+    out.close();
+}
+
+double Solver::compare(const std::vector<RUVP> &expected) {
     double res = 0.0;
-    for(int i = 0; i < expected.size(); i++){
+    for (int i = 0; i < expected.size(); i++) {
         res += std::abs(expected[i].p - solution_[i].p);
         res += std::abs(expected[i].u - solution_[i].u);
         res += std::abs(expected[i].v - solution_[i].v);
