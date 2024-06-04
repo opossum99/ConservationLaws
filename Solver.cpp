@@ -72,8 +72,8 @@ void Solver::boundaries() {
         Q_[ij2k(i, static_cast<int>(N_y - 1))][2] = -Q_[ij2k(i, static_cast<int>(N_y - 1))][2];
     }
     for (int j = 0; j < N_y; j++) {
-        Q_[ij2k(0, j)] = Q_[ij2k(1, 0)];
-        Q_[ij2k(0, j)][1] = -Q_[ij2k(0, 0)][1];
+        Q_[ij2k(0, j)] = Q_[ij2k(1, j)];
+        Q_[ij2k(0, j)][1] = -Q_[ij2k(0, j)][1];
         Q_[ij2k(static_cast<int>(stride_ - 1), j)] = Q_[ij2k(static_cast<int>(N_y - 2), j)];
         Q_[ij2k(static_cast<int>(N_y - 1), j)][1] = -Q_[ij2k(static_cast<int>(N_y - 1), j)][1];
     }
@@ -88,12 +88,13 @@ void Solver::LaxFriedrichs(const double T_end) {
             dt_ = cour_ / ((abs(u) + a) / x_step_ + (abs(v) + a) / y_step_);
         };
     };
+    int cnt = 0;
     while (time_ < T_end) {
         for (int i = 0; i < xy_.size(); i++) {
             cfl(i);
         }
-        for (int i = 0; i < stride_; i++) {
-            for (int j = 0; j < stride_; j++) {
+        for (int i = 1; i < stride_ - 1; i++) {
+            for (int j = 1; j < N_y - 1; j++) {
                 Q_tmp[ij2k(i, j)] = (Q_[ij2k(i + 1, j)] + Q_[ij2k(i, j - 1)] + Q_[ij2k(i - 1, j)] +
                                      Q_[ij2k(i, j + 1)]) / 4 - ((F_[ij2k(i + 1, j)] - F_[ij2k(i - 1, j)]) / x_step_ +
                                                                 (G_[ij2k(i, j + 1)] - G_[ij2k(i, j - 1)]) / y_step_) *
@@ -110,7 +111,9 @@ void Solver::LaxFriedrichs(const double T_end) {
         for (int i = 0; i < Q_.size(); i++) {
             solution_[i] = Q2var(Q_[i]);
         }
-        VisualVTK(std::string("../pictures/lax") + std::to_string(time_) + ".vtk");
+//        std::ostringstream filename;
+//        filename << std::setw(4) << std::setfill('0') << cnt++ << ".vtk";
+//        VisualVTK(std::string("../pictures/lax_") + filename.str());
         std::cout << "Time = " << time_ << std::endl;
     }
     for (int i = 0; i < xy_.size(); i++) {

@@ -12,10 +12,10 @@ int main() {
     Eigen::Matrix2d a;
     a << 0, 2, -2, 0;
     std::cout << a << std::endl;
-    const double length = 1.;
-    const double height = 1.;
+    const double length = 2.;
+    const double height = 2.;
     const double fraction = 1.;
-    const int N_y_inner = 10;
+    const int N_y_inner = 1000;
     const int N_x_inner = N_y_inner * static_cast<int>(length / height * fraction);
     const int N_y = N_y_inner + 2;
     const int N_x = N_x_inner + 2;
@@ -30,12 +30,12 @@ int main() {
 
 
     std::vector<RUVP> initial_conditions(N_x * N_y);
-    x_Riemann(initial_conditions, init_mesh);
-    const double T_end = 0.25;
+    cyl_Riemann(initial_conditions, init_mesh);
+    const double T_end = 0.75;
     double dt = 0.01;
     Solver lax_solver(init_mesh, initial_conditions, dt, N_x, 0.5);
     lax_solver.LaxFriedrichs(T_end);
-    lax_solver.VisualVTK("../pictures/data.vtk");
+    lax_solver.VisualVTK("../data.vtk");
 
 //    Solver mhm_solver(init_mesh, initial_conditions, dt, N_x, 0.5);
 //    mhm_solver.MUSCL_MHM(T_end);
